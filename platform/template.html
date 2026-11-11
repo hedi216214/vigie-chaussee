@@ -1,0 +1,350 @@
+<title>Vigie Chaussée</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout : bandeau d'indicateurs, puis poste d'observation (image à gauche, fiche de décision à droite), puis galerie des scènes. */
+:root{
+  --bg:#eef0ee; --panel:#ffffff; --ink:#1b2422; --muted:#5d6966; --line:#d5dad7;
+  --accent:#1f5f8b; --accent-ink:#ffffff; --zone:#f2a516; --ref:#16a3a3; --lane:#ffffff;
+  --ok:#2f8a4e; --mod:#b88a00; --high:#d0661c; --crit:#c2302b;
+  --ok-bg:#e3f2e7; --mod-bg:#f8f0d2; --high-bg:#fbe7d8; --crit-bg:#f9dedc;
+  --display:"Barlow Semi Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#131917; --panel:#1c2421; --ink:#e7ecea; --muted:#9aa7a3; --line:#2e3935;
+  --accent:#6fb3e0; --accent-ink:#0d1a24; --zone:#f5b437; --ref:#3cc8c8; --lane:#ffffff;
+  --ok:#5fc07f; --mod:#e0bd3c; --high:#f08a45; --crit:#f0625c;
+  --ok-bg:#1d3325; --mod-bg:#36301a; --high-bg:#3b2719; --crit-bg:#3d1f1e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#131917; --panel:#1c2421; --ink:#e7ecea; --muted:#9aa7a3; --line:#2e3935;
+  --accent:#6fb3e0; --accent-ink:#0d1a24; --zone:#f5b437; --ref:#3cc8c8; --lane:#ffffff;
+  --ok:#5fc07f; --mod:#e0bd3c; --high:#f08a45; --crit:#f0625c;
+  --ok-bg:#1d3325; --mod-bg:#36301a; --high-bg:#3b2719; --crit-bg:#3d1f1e; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;margin:0}
+.wrap{max-width:1180px;margin:0 auto;padding-block:28px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:28px}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.01em;margin:0;text-wrap:balance}
+h1{font-size:clamp(30px,4.4vw,44px);line-height:1.05}
+h2{font-size:24px}
+h3{font-size:15px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+p{margin:0}
+header{display:grid;gap:10px}
+.sign{display:inline-flex;align-items:center;gap:10px;font-family:var(--display);font-weight:600;font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.sign i{width:22px;height:22px;border:3px solid var(--crit);border-radius:50%;display:inline-block;background:var(--panel)}
+.lede{color:var(--muted);max-width:68ch;font-size:16px}
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;display:grid;gap:4px;align-content:start}
+.kpi b{font-family:var(--display);font-size:32px;line-height:1;font-variant-numeric:tabular-nums}
+.kpi span{font-size:13px;color:var(--muted)}
+.station{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:20px;align-items:start}
+.view{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.view canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#000}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px;border-top:1px solid var(--line);align-items:center}
+.tog{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;user-select:none;background:var(--bg)}
+.tog input{accent-color:var(--accent);margin:0}
+.tog .sw{width:12px;height:12px;border-radius:2px;display:inline-block}
+.tog:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px;display:grid;gap:16px}
+.risk{border-radius:6px;padding:14px 16px;display:grid;gap:2px}
+.risk small{font-size:12px;text-transform:uppercase;letter-spacing:.1em;font-weight:600}
+.risk strong{font-family:var(--display);font-size:34px;line-height:1.05}
+.risk p{font-size:14px}
+.r-faible{background:var(--ok-bg);color:var(--ok)} .r-modéré{background:var(--mod-bg);color:var(--mod)}
+.r-élevé{background:var(--high-bg);color:var(--high)} .r-critique{background:var(--crit-bg);color:var(--crit)}
+.risk p{color:var(--ink)}
+.rows{display:grid;gap:10px}
+.row{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:8px}
+.row:last-child{border-bottom:0;padding-bottom:0}
+.row span{color:var(--muted);font-size:14px}
+.row b{text-align:right;font-weight:600}
+.lane{display:grid;gap:6px}
+.lanebar{display:flex;height:26px;border-radius:4px;overflow:hidden;border:1px solid var(--line);font-family:var(--mono);font-size:11px}
+.lanebar div{display:flex;align-items:center;justify-content:center;min-width:0;overflow:hidden;white-space:nowrap}
+.lanebar .free{background:var(--ok-bg);color:var(--ok)} .lanebar .obs{background:var(--zone);color:#2a1d00}
+.legend{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.check{font-size:13px;color:var(--muted);border-top:1px dashed var(--line);padding-top:12px;display:grid;gap:4px}
+.check b{color:var(--ink);font-weight:600}
+.tick{font-weight:600} .tick.yes{color:var(--ok)} .tick.no{color:var(--crit)}
+.gallery{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.thumb{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:0;overflow:hidden;cursor:pointer;text-align:left;font:inherit;color:inherit;display:grid}
+.thumb img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover}
+.thumb div{padding:8px 10px;display:flex;justify-content:space-between;gap:6px;align-items:center;font-size:13px}
+.thumb[aria-pressed="true"]{outline:3px solid var(--accent);outline-offset:-3px}
+.thumb:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.bo{font-family:var(--display);font-weight:700;font-size:12px;letter-spacing:.06em;color:var(--accent);text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px;margin-left:6px;white-space:nowrap}
+.goals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.goal{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;display:grid;gap:6px;align-content:start}
+.goal .bo{margin-left:0;font-size:15px}
+.goal b{font-family:var(--display);font-size:22px;line-height:1.1}
+.goal p{color:var(--muted);font-size:14px}
+.goal small{font-size:13px;color:var(--ink)}
+@media (max-width:900px){.goals{grid-template-columns:1fr}}
+.chip{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.section{display:grid;gap:14px}
+.notes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.note{border-top:3px solid var(--accent);padding-top:10px;display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:14px}
+.note b{color:var(--ink);font-family:var(--display);font-size:18px}
+.scale{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.scale .risk{padding:10px 12px} .scale strong{font-size:20px}
+.upload{background:var(--panel);border:1px dashed var(--muted);border-radius:6px;padding:18px;display:grid;gap:10px}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:4px;padding:9px 14px;font:600 14px var(--body);cursor:pointer;justify-self:start}
+.btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+footer{color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:14px}
+@media (max-width:900px){.station{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.gallery{grid-template-columns:repeat(2,minmax(0,1fr))}.notes{grid-template-columns:1fr}}
+@media (max-width:480px){.scale{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (prefers-reduced-motion:no-preference){.risk,.lanebar div{transition:background-color .25s,flex-basis .35s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="sign"><i aria-hidden="true"></i>Vigie Chaussée</div>
+    <h1>Repérer un obstacle sur la route et dire à l’usager par où passer</h1>
+    <p class="lede">Chaque photo prise depuis le véhicule est analysée : un obstacle est-il présent, où se trouve-t-il, quelle part de la voie occupe-t-il et reste-t-il assez de place pour passer à gauche ou à droite. Les dix scènes ci-dessous n'ont jamais été vues pendant l'apprentissage.</p>
+  </header>
+
+  <section class="section" aria-label="Les trois objectifs">
+    <h2>Les trois objectifs de Vigie Chaussée</h2>
+    <div class="goals">
+      <div class="goal"><u class="bo">Objectif 1 · Détecter</u><b>Un obstacle est-il présent ?</b><p>L'outil examine chaque partie de la photo et signale la scène dès qu'un obstacle inattendu apparaît.</p><small>Sur la fiche : « Obstacle signalé ».</small></div>
+      <div class="goal"><u class="bo">Objectif 2 · Localiser</u><b>Où se trouve-t-il ?</b><p>L'obstacle est dessiné en orange sur la photo, au plus près de sa forme réelle.</p><small>Sur la photo : « Obstacle repéré ».</small></div>
+      <div class="goal"><u class="bo">Objectif 3 · Qualifier le passage</u><b>Reste-t-il la place de passer ?</b><p>L'outil mesure la part de la voie occupée et l'espace libre de chaque côté, puis recommande un passage.</p><small>Sur la fiche : passage, voie occupée, niveau de risque.</small></div>
+    </div>
+  </section>
+
+  <section class="kpis" id="kpis" aria-label="Indicateurs clés"></section>
+
+  <section class="station" aria-label="Poste d'observation">
+    <div class="view">
+      <canvas id="cv" width="1024" height="576" aria-label="Scène analysée"></canvas>
+      <div class="toolbar">
+        <label class="tog"><input type="checkbox" id="t-zone" checked><span class="sw" style="background:var(--zone)"></span>Obstacle repéré <u class="bo">Objectif 2</u></label>
+        <label class="tog"><input type="checkbox" id="t-lane" checked><span class="sw" style="background:transparent;border:2px solid var(--muted)"></span>Voie du véhicule</label>
+        <label class="tog"><input type="checkbox" id="t-ref"><span class="sw" style="background:var(--ref)"></span>Contour réel de l'obstacle</label>
+      </div>
+    </div>
+    <aside class="card" id="fiche" aria-live="polite"></aside>
+  </section>
+
+  <section class="section">
+    <h2>Les dix scènes de contrôle</h2>
+    <div class="gallery" id="gallery"></div>
+  </section>
+
+  <section class="section" id="upload-sec">
+    <h2>Analyser votre propre photo</h2>
+    <div class="upload">
+      <p>Choisissez une photo prise depuis un véhicule, la route face à vous. L'analyse se fait dans votre navigateur : la photo n'est envoyée nulle part. Le premier essai télécharge l'outil d'analyse (36 Mo), puis chaque photo prend 2 à 3 secondes.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+        <label class="btn" for="file" style="display:inline-block">Choisir une photo</label>
+        <input type="file" id="file" accept="image/*" style="position:absolute;opacity:0;width:1px;height:1px">
+        <button class="btn" type="button" id="demo" style="background:var(--bg);color:var(--ink);border:1px solid var(--line)">Essayer avec une photo d'exemple</button>
+      </div>
+      <p id="up-status" style="color:var(--muted);font-size:13px" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Comment lire le niveau de risque</h2>
+    <div class="scale">
+      <div class="risk r-faible"><small>Faible</small><strong>Voie libre</strong></div>
+      <div class="risk r-modéré"><small>Modéré</small><strong>Passage des deux côtés</strong></div>
+      <div class="risk r-élevé"><small>Élevé</small><strong>Passage d'un seul côté</strong></div>
+      <div class="risk r-critique"><small>Critique</small><strong>Passage difficile ou voie bloquée</strong></div>
+    </div>
+    <div class="notes">
+      <div class="note"><b>La voie du véhicule</b>La zone examinée est la portion de route devant le véhicule, dessinée en trapèze. Un obstacle sur le bas-côté ne la gêne pas.</div>
+      <div class="note"><b>L'occupation</b>La part de cette voie couverte par l'obstacle : moins de 5 % est négligeable, plus de 30 % rend le passage critique.</div>
+      <div class="note"><b>L'espace libre</b>La place qui reste de chaque côté de l'obstacle, à sa hauteur. Au moins 30 % de la largeur permet un passage confortable, moins de 15 % est trop étroit.</div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Ce qu'il faut garder en tête</h2>
+    <div class="notes" id="limits"></div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const RISK_TEXT = {"faible":"Aucune action nécessaire.","modéré":"Ralentir, le passage reste possible des deux côtés.","élevé":"Ralentir et contourner par le côté indiqué.","critique":"Freiner : la place manque pour contourner sans danger."};
+const fmt = (v, d=0) => Number(v).toLocaleString('fr-FR', {maximumFractionDigits:d, minimumFractionDigits:d});
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const [H, W] = DATA.mask_shape;
+const masks = {};
+
+async function unpack(b64){
+  const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const raw = new Uint8Array(await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer());
+  const out = new Uint8Array(H*W);
+  for (let i=0;i<out.length;i++) out[i] = (raw[i>>3] >> (7-(i&7))) & 1;
+  return out;
+}
+
+function kpis(){
+  const k = DATA.kpi;
+  const tiles = [
+    [`${k.scenes}`, 'scènes analysées'],
+    [`${k.scenes_signalees}/${k.scenes}`, 'scènes où un obstacle est signalé <u class="bo">Objectif 1</u>'],
+    [`${k.obstacles_trouves}/${k.obstacles_total}`, 'obstacles retrouvés <u class="bo">Objectif 2</u>'],
+    [`${k.risque_correct}/${k.scenes}`, 'niveaux de risque identiques au constat réel <u class="bo">Objectif 3</u>'],
+    ['2 à 3 s', 'pour analyser une photo dans le navigateur, sans serveur'],
+  ];
+  document.getElementById('kpis').innerHTML = tiles.map(([b,s]) => `<div class="kpi"><b>${b}</b><span>${s}</span></div>`).join('');
+}
+
+function laneBar(s){
+  const occ = Math.max(0, Math.min(100, s.occupation_pct));
+  const l = Math.max(0, s.libre_gauche_pct), r = Math.max(0, s.libre_droite_pct);
+  if (s.passage === 'voie libre') return `<div class="lanebar"><div class="free" style="flex-basis:100%">voie dégagée</div></div>`;
+  const mid = Math.max(4, 100 - l - r);
+  return `<div class="lanebar"><div class="free" style="flex-basis:${l}%">${l>=12?fmt(l)+' %':''}</div><div class="obs" style="flex-basis:${mid}%">${mid>=14?'obstacle':''}</div><div class="free" style="flex-basis:${r}%">${r>=12?fmt(r)+' %':''}</div></div>
+  <div class="legend"><span>libre à gauche</span><span>libre à droite</span></div>`;
+}
+
+function fiche(s){
+  const same = !!s.reel && s.risque === s.reel.risque;
+  document.getElementById('fiche').innerHTML = `
+    <div class="risk r-${s.risque}"><small>Niveau de risque <u class="bo" style="color:inherit">Objectif 3</u></small><strong>${cap(s.risque)}</strong><p>${RISK_TEXT[s.risque]}</p></div>
+    <div class="rows">
+      <div class="row"><span>Obstacle signalé <u class="bo">Objectif 1</u></span><b>${s.obstacle_signale ? 'Oui' : 'Non'}</b></div>
+      ${s.type ? `<div class="row"><span>Type de scène</span><b>${s.type}</b></div>` : ''}
+      <div class="row"><span>Passage recommandé <u class="bo">Objectif 3</u></span><b>${cap(s.passage)}</b></div>
+      <div class="row"><span>Part de la voie occupée <u class="bo">Objectif 3</u></span><b>${fmt(s.occupation_pct)} %</b></div>
+    </div>
+    <div class="lane"><h3>Largeur de la voie à hauteur de l'obstacle <u class="bo">Objectif 3</u></h3>${laneBar(s)}</div>
+    ${s.reel ? `<div class="check">
+      <div>Constat réel : <b>${cap(s.reel.passage)}</b>, risque <b>${s.reel.risque}</b>, ${fmt(s.reel.occupation_pct)} % de la voie occupée.</div>
+      <div>Niveau de risque <span class="tick ${same?'yes':'no'}">${same ? 'confirmé' : 'différent du constat réel'}</span> · ${fmt(s.zone_obstacle_trouve_pct)} % de la surface de l'obstacle repérée <u class="bo">Objectif 2</u>.</div>
+    </div>` : `<div class="check"><div>Votre photo, analysée en ${fmt(s.ms)} ms sur cet appareil. Aucun constat réel n'est disponible pour la comparer.</div></div>`}`;
+}
+
+const imgs = DATA.scenes.map(s => { const im = new Image(); im.src = DATA.images[s.i]; return im; });
+let cur = 0;
+
+function lanePath(ctx, w, h){
+  ctx.beginPath(); ctx.moveTo(0.10*w, h); ctx.lineTo(0.40*w, 0.55*h); ctx.lineTo(0.60*w, 0.55*h); ctx.lineTo(0.90*w, h); ctx.closePath();
+}
+function paintMask(ctx, m, color, alpha, w, h){
+  if (!m) return;
+  const off = document.createElement('canvas'); off.width = W; off.height = H;
+  const o = off.getContext('2d'), id = o.createImageData(W, H);
+  const c = color.match(/\w\w/g).map(x => parseInt(x,16));
+  for (let i=0;i<m.length;i++) if (m[i]) { id.data[4*i]=c[0]; id.data[4*i+1]=c[1]; id.data[4*i+2]=c[2]; id.data[4*i+3]=255*alpha; }
+  o.putImageData(id, 0, 0);
+  ctx.imageSmoothingEnabled = true; ctx.drawImage(off, 0, 0, w, h);
+}
+function draw(){
+  const cv = document.getElementById('cv'), ctx = cv.getContext('2d'), w = cv.width, h = cv.height;
+  const im = cur === 'u' ? user.img : imgs[cur];
+  ctx.clearRect(0,0,w,h);
+  if (im && (im.complete ?? true)) ctx.drawImage(im, 0, 0, w, h);
+  if (document.getElementById('t-lane').checked){
+    ctx.save(); lanePath(ctx, w, h); ctx.fillStyle = 'rgba(255,255,255,0.10)'; ctx.fill();
+    ctx.setLineDash([18,12]); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.stroke(); ctx.restore();
+  }
+  if (cur !== 'u' && document.getElementById('t-ref').checked) paintMask(ctx, masks['ref'+cur], css('--ref').replace('#',''), 0.55, w, h);
+  if (document.getElementById('t-zone').checked) paintMask(ctx, cur === 'u' ? user.mask : masks['pred'+cur], css('--zone').replace('#',''), 0.6, w, h);
+}
+function select(i){
+  cur = i; fiche(i === 'u' ? user.scene : DATA.scenes[i]);
+  document.getElementById('t-ref').disabled = i === 'u';
+  document.querySelectorAll('.thumb').forEach((b,j) => b.setAttribute('aria-pressed', j===i ? 'true' : 'false'));
+  draw();
+}
+function gallery(){
+  document.getElementById('gallery').innerHTML = DATA.scenes.map((s,i) => `
+    <button class="thumb" type="button" id="sc${i}" aria-pressed="false" aria-label="Scène ${i+1}, risque ${s.risque}">
+      <img src="${DATA.images[s.i]}" alt="">
+      <div><span>${s.type}</span><span class="chip r-${s.risque}">${s.risque}</span></div>
+    </button>`).join('');
+  document.querySelectorAll('.thumb').forEach((b,i) => b.addEventListener('click', () => select(i)));
+}
+function limits(){
+  const k = DATA.kpi, L = DATA.limits;
+  document.getElementById('limits').innerHTML = `
+    <div class="note"><b>Un contrôle sur dix scènes</b>Les chiffres de cette page viennent de dix photos de contrôle. Ils donnent une tendance ; un essai sur un plus grand nombre de routes reste nécessaire avant toute mise en service.</div>
+    <div class="note"><b>Des alertes à tort</b>${fmt(k.surface_signalee_a_tort_pct)} % de la surface signalée comme obstacle n'en est pas un (ombres, marquages, bords de route). Une alerte doit être confirmée par le conducteur.</div>
+    <div class="note"><b>Une aide, pas un pilote</b>L'outil prévient et conseille. La décision de freiner ou de contourner reste celle du conducteur.</div>`;
+  document.getElementById('foot').textContent = DATA.footer;
+}
+
+
+/* ---------- Analyse d'une photo de l'utilisateur : zone (BO2) et couloir (BO3) par le modèle déployé ---------- */
+const user = {img:null, mask:null, scene:null, session:null};
+const RISKMAP = {"voie libre":"faible","passage des deux côtés":"modéré","passage à gauche":"élevé","passage à droite":"élevé","passage difficile":"critique","voie bloquée":"critique"};
+const say = t => document.getElementById('up-status').textContent = t;
+function occClass(o){ return o < .05 ? 'faible' : o < .15 ? 'modérée' : o < .30 ? 'forte' : 'critique'; }
+function passability(occ, fl, fr){
+  if (occ < 0.002) return 'voie libre';
+  const lat = Math.max(0, 1-fl-fr), lok = fl >= .30, rok = fr >= .30;
+  let c;
+  if (lat >= .90 || Math.max(fl, fr) < .15) c = 'voie bloquée';
+  else if (lok && rok) c = 'passage des deux côtés';
+  else if (lok) c = 'passage à gauche';
+  else if (rok) c = 'passage à droite';
+  else c = 'passage difficile';
+  if (occ > .30 && c.startsWith('passage') && c !== 'passage difficile') c = 'passage difficile';
+  return c;
+}
+async function loadModel(){
+  if (user.session) return user.session;
+  if (!window.ort) throw new Error("l'outil d'analyse n'a pas pu se charger.");
+  ort.env.wasm.numThreads = 1;
+  ort.env.wasm.wasmPaths = new URL('ort/', location.href).href;
+  const meta = await (await fetch('model/model.json')).json();
+  const parts = []; let got = 0;
+  for (const f of meta.parts){
+    say(`Téléchargement de l'outil d'analyse : ${Math.round(got/1e6)} / ${Math.round(meta.bytes/1e6)} Mo`);
+    const b = new Uint8Array(await (await fetch('model/'+f)).arrayBuffer()); parts.push(b); got += b.length;
+  }
+  const all = new Uint8Array(got); let o = 0; for (const p of parts){ all.set(p, o); o += p.length; }
+  say("Préparation de l'outil d'analyse…");
+  user.session = await ort.InferenceSession.create(all.buffer, {executionProviders:['wasm'], graphOptimizationLevel:'all'});
+  return user.session;
+}
+async function analyse(src){
+  const btns = [document.getElementById('demo')]; btns.forEach(b => b.disabled = true);
+  try{
+    const off = document.createElement('canvas'); off.width = W; off.height = H;
+    const c = off.getContext('2d', {willReadFrequently:true});
+    const sw = src.width, sh = src.height, r = W/H; let cw = sw, ch = sw/r; if (ch > sh){ ch = sh; cw = sh*r; }
+    c.drawImage(src, (sw-cw)/2, (sh-ch)/2, cw, ch, 0, 0, W, H);
+    const rgb = c.getImageData(0, 0, W, H).data, N = W*H;
+    const session = await loadModel();
+    say('Analyse en cours…'); await new Promise(r => setTimeout(r, 30));
+    const x = new Float32Array(3*N);
+    for (let q=0;q<N;q++){ x[q] = rgb[4*q]/255; x[N+q] = rgb[4*q+1]/255; x[2*N+q] = rgb[4*q+2]/255; }
+    const t0 = performance.now();
+    const res = await session.run({image: new ort.Tensor('float32', x, [1,3,H,W])});
+    const ms = performance.now() - t0, prob = res.prob.data, mask = new Uint8Array(N);
+    let any = 0; for (let q=0;q<N;q++){ if (prob[q] >= DATA.threshold){ mask[q] = 1; any++; } }
+    const cor = res.corridor.data, occ = cor[0], fl = cor[1], fr = cor[2], pass = passability(occ, fl, fr);  // sortie BO3 du modèle déployé
+    user.img = off; user.mask = mask;
+    user.scene = {obstacle_signale: any/N >= 0.002, type: null, passage: pass, risque: RISKMAP[pass],
+                  occupation_pct: occ*100, libre_gauche_pct: fl*100, libre_droite_pct: fr*100, reel: null, ms};
+    select('u'); say(`Photo analysée en ${fmt(ms)} ms sur cet appareil.`);
+    document.querySelector('.station').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+  } catch(e){ say("L'analyse n'a pas pu se faire : " + (e && e.message ? e.message : e) + " Réessayez, ou utilisez un autre navigateur."); }
+  finally { btns.forEach(b => b.disabled = false); }
+}
+document.getElementById('file').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  if (!f.type.startsWith('image/')){ say("Ce fichier n'est pas une photo. Choisissez un fichier JPEG, PNG ou WebP."); return; }
+  try { analyse(await createImageBitmap(f)); } catch { say("Cette photo n'a pas pu être lue. Essayez un autre fichier."); }
+});
+document.getElementById('demo').addEventListener('click', () => analyse(imgs[0]));
+
+(async () => {
+  kpis(); gallery(); limits();
+  for (let i=0;i<DATA.scenes.length;i++){ masks['pred'+i] = await unpack(DATA.pred[i]); masks['ref'+i] = await unpack(DATA.ref[i]); }
+  imgs.forEach(im => im.addEventListener('load', () => draw()));
+  ['t-zone','t-lane','t-ref'].forEach(id => document.getElementById(id).addEventListener('change', draw));
+  select(0);
+})();
+</script>

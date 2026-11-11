@@ -1,0 +1,55 @@
+{
+  "notebook": "02",
+  "env": {
+    "python": "3.13.16",
+    "numpy": "2.4.6",
+    "torch": "2.11.0+cu130",
+    "torchvision": "0.26.0+cu130",
+    "sklearn": "1.6.1",
+    "PIL": "11.3.0",
+    "gradio": "6.31.0",
+    "cuda": "13.0",
+    "gpu": "Tesla T4"
+  },
+  "config": {
+    "seed": 42,
+    "work_size": [
+      512,
+      288
+    ],
+    "batch_size": 4,
+    "epochs": 60,
+    "patience": 15,
+    "lr_backbone": 0.0001,
+    "lr_head": 0.001,
+    "weight_decay": 0.0001,
+    "max_pos_weight": 10.0,
+    "amp": true,
+    "num_workers": 2,
+    "extra": {}
+  },
+  "split_sizes": {
+    "train": 40,
+    "val": 10,
+    "test": 10
+  },
+  "pixel_pos_fraction_train": 0.08792538113064235,
+  "pos_weight": 10.0,
+  "patches": {
+    "size": 96,
+    "stride": 48,
+    "pos_min": 0.05,
+    "train": {
+      "n": 1527,
+      "pos": 624
+    },
+    "val": {
+      "n": 413,
+      "pos": 216
+    },
+    "test": {
+      "n": 365,
+      "pos": 150
+    }
+  }
+}

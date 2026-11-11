@@ -1,0 +1,7 @@
+# Google Colab fournit déjà : torch, torchvision, numpy, pandas, scipy, scikit-learn, matplotlib, pillow, gdown.
+# À installer (cellules !pip des notebooks) :
+segmentation-models-pytorch   # repli DeepLabV3+ ImageNet si les poids Cityscapes sont indisponibles (notebook 04)
+gradio                        # application web
+pytest                        # tests unitaires (optionnel)
+# Dépôt cloné automatiquement (notebooks 04 et 05) : https://github.com/VainF/DeepLabV3Plus-Pytorch
+# Notez les versions réellement utilisées : elles sont enregistrées dans outputs/results/*.json (clé "env").

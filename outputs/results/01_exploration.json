@@ -1,0 +1,37 @@
+{
+  "notebook": "01",
+  "env": {
+    "python": "3.13.16",
+    "numpy": "2.4.6",
+    "torch": "2.11.0+cu130",
+    "torchvision": "0.26.0+cu130",
+    "sklearn": "1.6.1",
+    "PIL": "11.3.0",
+    "gradio": "6.31.0",
+    "cuda": "13.0",
+    "gpu": "Tesla T4"
+  },
+  "n_images": 60,
+  "images_par_famille": {
+    "faune": 31,
+    "debris_objets_perdus": 13,
+    "infrastructure_temporaire": 13,
+    "autre": 3
+  },
+  "controles_audit": {
+    "images_illisibles": 0,
+    "taille_image_differente_du_masque": 0,
+    "valeurs_inattendues_dans_masque": 0,
+    "masques_sans_anomalie": 0,
+    "images_avec_composantes_minuscules": 18,
+    "images_sans_masque_instance": 14
+  },
+  "objets_par_taille": {
+    "petit": 286,
+    "moyen": 55,
+    "grand": 25
+  },
+  "familles_sous_representees": [
+    "autre"
+  ]
+}
