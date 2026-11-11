@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Dataset (downloaded automatically by the notebooks)
+data/
+
+# Large training artifacts
+outputs/checkpoints/
+outputs/webapp_models/
+*.pth
+*.pt
+model_fp32.onnx
